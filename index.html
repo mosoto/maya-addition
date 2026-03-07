@@ -241,6 +241,22 @@
       font-size: .9rem;
     }
     .hidden { display: none !important; }
+    .pad-display {
+      width: min(100%, 240px);
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+      padding: 10px 16px;
+      border-radius: 18px;
+      border: 3px solid #d9ccff;
+      background: linear-gradient(180deg, #ffffff, #f6f1ff);
+      color: #3f2bb8;
+      font-size: 2rem;
+      font-weight: 900;
+      box-shadow: 0 8px 18px rgba(124, 92, 255, .12);
+    }
     .numpad {
       width: min(100%, 360px);
       display: grid;
@@ -319,6 +335,7 @@
           <div class="hint" id="roundState">Press start to begin.</div>
           <div class="problem" id="problemText">3 + 4</div>
           <div class="feedback" id="feedback"></div>
+          <div class="pad-display hidden" id="padDisplay">0</div>
 
           <form id="answerForm" autocomplete="off">
             <input id="answerInput" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" placeholder="Answer" disabled />
@@ -521,7 +538,8 @@
       hardestFact: document.getElementById('hardestFact'),
       factTable: document.getElementById('factTable'),
       numpad: document.getElementById('numpad'),
-      celebrationLayer: document.getElementById('celebrationLayer')
+      celebrationLayer: document.getElementById('celebrationLayer'),
+      padDisplay: document.getElementById('padDisplay')
     };
 
     let app = loadState();
@@ -588,8 +606,10 @@
       el.inputMode.value = app.settings.inputMode;
       el.answerForm.classList.toggle('hidden', useNumpad);
       el.numpad.classList.toggle('hidden', !useNumpad);
+      el.padDisplay.classList.toggle('hidden', !useNumpad);
       el.answerInput.disabled = paused || useNumpad;
       el.submitBtn.disabled = paused;
+      updatePadDisplay();
       if (!paused && !useNumpad) el.answerInput.focus();
     }
 
@@ -613,6 +633,7 @@
       el.feedback.textContent = '';
       el.feedback.className = 'feedback';
       el.answerInput.value = '';
+      updatePadDisplay();
       el.roundState.textContent = 'Solve it before time runs out.';
       fact.shown += 1;
       roundStartedAt = Date.now();
@@ -700,17 +721,25 @@
       handleResult(answer === correctAnswer, answer === correctAnswer ? 'Nice job!' : `Oops — the answer was ${correctAnswer}.`);
     }
 
+    function updatePadDisplay() {
+      const value = el.answerInput.value || '0';
+      el.padDisplay.textContent = value;
+    }
+
     function handlePadPress(value) {
       if (paused) return;
       if (value === 'clear') {
         el.answerInput.value = '';
+        updatePadDisplay();
         return;
       }
       if (value === 'ok') {
         handleSubmit({ preventDefault() {} });
+        updatePadDisplay();
         return;
       }
       el.answerInput.value = `${el.answerInput.value}${value}`.slice(0, 3);
+      updatePadDisplay();
     }
 
     function handleTimeout() {
@@ -740,6 +769,7 @@
       el.feedback.className = 'feedback';
       el.problemText.textContent = '3 + 4';
       el.answerInput.value = '';
+      updatePadDisplay();
       el.countdownNumber.textContent = String(app.settings.timeLimit || 10);
       el.roundState.textContent = 'Press start to begin.';
       render();
@@ -834,6 +864,7 @@
       if (el.answerInput.value !== cleaned) {
         el.answerInput.value = cleaned;
       }
+      updatePadDisplay();
     });
 
     el.numpad.addEventListener('click', (evt) => {
@@ -878,6 +909,7 @@
       el.inputMode.value = app.settings.inputMode || 'keyboard';
       el.answerInput.disabled = true;
       el.submitBtn.disabled = true;
+      updatePadDisplay();
       el.countdownNumber.textContent = String(app.settings.timeLimit || 10);
       syncInputMode();
       saveState();
