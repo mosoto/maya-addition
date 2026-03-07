@@ -89,6 +89,7 @@
       font-weight: 800;
     }
     .card {
+      position: relative;
       min-height: 430px;
       display: flex;
       flex-direction: column;
@@ -99,6 +100,7 @@
       border: 1px solid var(--border);
       background: linear-gradient(180deg, #fdf1ff 0%, #fff8d9 45%, #ffffff 100%);
       padding: 20px;
+      overflow: hidden;
     }
     .timer-track {
       width: min(100%, 520px);
@@ -145,7 +147,7 @@
       display: flex;
       gap: 10px;
     }
-    input[type="number"] {
+    input[type="text"] {
       flex: 1;
       padding: 14px 16px;
       font-size: 1.4rem;
@@ -195,7 +197,7 @@
     .setting-row:last-child { border-bottom: none; }
     .setting-row label { font-weight: 700; }
     .setting-row small { display: block; color: var(--muted); margin-top: 2px; }
-    select, .inline-input {
+    select {
       padding: 10px 12px;
       border-radius: 12px;
       border: 1px solid #d8ddf0;
@@ -238,6 +240,50 @@
       color: var(--muted);
       font-size: .9rem;
     }
+    .hidden { display: none !important; }
+    .numpad {
+      width: min(100%, 360px);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .pad-btn {
+      min-height: 68px;
+      font-size: 1.7rem;
+      font-weight: 900;
+      border-radius: 18px;
+      color: #2d2b55;
+      background: linear-gradient(180deg, #ffffff, #efe9ff);
+      box-shadow: 0 8px 18px rgba(124, 92, 255, .12);
+    }
+    .pad-btn.secondary-pad {
+      background: linear-gradient(180deg, #fff7d8, #ffe7a8);
+    }
+    .pad-btn.submit-pad {
+      color: white;
+      background: linear-gradient(135deg, #34d399, #16a34a);
+    }
+    .celebration-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      border-radius: 28px;
+    }
+    .confetti {
+      position: absolute;
+      top: 18%;
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      opacity: .95;
+      animation: fall 900ms ease-out forwards;
+    }
+    @keyframes fall {
+      0% { transform: translateY(-10px) rotate(0deg) scale(1); opacity: 1; }
+      100% { transform: translateY(180px) rotate(220deg) scale(.7); opacity: 0; }
+    }
     .empty {
       color: var(--muted);
       text-align: center;
@@ -267,15 +313,33 @@
         </div>
 
         <div class="card">
+          <div class="celebration-layer" id="celebrationLayer"></div>
           <div class="timer-track"><div class="timer-bar" id="timerBar"></div></div>
           <div class="countdown-number" id="countdownNumber">10</div>
           <div class="hint" id="roundState">Press start to begin.</div>
           <div class="problem" id="problemText">3 + 4</div>
           <div class="feedback" id="feedback"></div>
+
           <form id="answerForm" autocomplete="off">
-            <input id="answerInput" type="number" inputmode="numeric" min="0" max="20" placeholder="Answer" disabled />
+            <input id="answerInput" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" placeholder="Answer" disabled />
             <button id="submitBtn" type="submit" disabled>OK</button>
           </form>
+
+          <div class="numpad hidden" id="numpad" aria-label="Number pad">
+            <button type="button" class="pad-btn" data-pad="1">1</button>
+            <button type="button" class="pad-btn" data-pad="2">2</button>
+            <button type="button" class="pad-btn" data-pad="3">3</button>
+            <button type="button" class="pad-btn" data-pad="4">4</button>
+            <button type="button" class="pad-btn" data-pad="5">5</button>
+            <button type="button" class="pad-btn" data-pad="6">6</button>
+            <button type="button" class="pad-btn" data-pad="7">7</button>
+            <button type="button" class="pad-btn" data-pad="8">8</button>
+            <button type="button" class="pad-btn" data-pad="9">9</button>
+            <button type="button" class="pad-btn secondary-pad" data-pad="clear">Clear</button>
+            <button type="button" class="pad-btn" data-pad="0">0</button>
+            <button type="button" class="pad-btn submit-pad" data-pad="ok">OK</button>
+          </div>
+
           <div class="controls" style="margin-top:18px; width:min(100%,420px)">
             <div class="controls-row">
               <button id="startBtn" type="button">Start</button>
@@ -310,6 +374,9 @@
             <select id="maxAddend">
               <option value="5">5</option>
               <option value="10" selected>10</option>
+              <option value="20">20</option>
+              <option value="40">40</option>
+              <option value="100">100</option>
             </select>
           </div>
           <div class="setting-row">
@@ -323,6 +390,16 @@
               <option value="4">High</option>
             </select>
           </div>
+          <div class="setting-row">
+            <div>
+              <label for="inputMode">Answer style</label>
+              <small>Choose keyboard entry or a big tap-friendly number pad.</small>
+            </div>
+            <select id="inputMode">
+              <option value="keyboard">Keyboard</option>
+              <option value="numpad">Number pad</option>
+            </select>
+          </div>
         </div>
 
         <div class="history" style="margin-top:18px;">
@@ -331,6 +408,7 @@
             <div class="mini"><div class="k">Lifetime Answered</div><div class="v" id="lifeTotal">0</div></div>
             <div class="mini"><div class="k">Lifetime Accuracy</div><div class="v" id="lifeAccuracy">0%</div></div>
             <div class="mini"><div class="k">Sessions</div><div class="v" id="lifeSessions">0</div></div>
+            <div class="mini"><div class="k">Stars</div><div class="v" id="lifeStars">⭐ 0</div></div>
             <div class="mini"><div class="k">Hardest Fact</div><div class="v" id="hardestFact">—</div></div>
           </div>
           <div class="controls-row" style="margin-top:12px;">
@@ -353,7 +431,66 @@
   </div>
 
   <script>
-    const STORAGE_KEY = 'addition-practice-v2';
+    const STORAGE_KEY = 'addition-practice-v3';
+
+    const defaultSettings = {
+      timeLimit: 10,
+      maxAddend: 10,
+      repeatsBias: 2.5,
+      inputMode: 'keyboard'
+    };
+
+    function createFacts(maxAddend = 10) {
+      const facts = {};
+      for (let a = 0; a <= maxAddend; a++) {
+        for (let b = 0; b <= maxAddend; b++) {
+          const key = `${a}+${b}`;
+          facts[key] = {
+            a,
+            b,
+            correct: 0,
+            wrong: 0,
+            shown: 0,
+            totalResponseMs: 0,
+            fastestMs: null,
+            slowestMs: null
+          };
+        }
+      }
+      return facts;
+    }
+
+    function normalizeState(raw) {
+      const settings = { ...defaultSettings, ...(raw?.settings || {}) };
+      const lifetime = {
+        sessions: Number(raw?.lifetime?.sessions || 0),
+        correct: Number(raw?.lifetime?.correct || 0),
+        wrong: Number(raw?.lifetime?.wrong || 0),
+        stars: Number(raw?.lifetime?.stars || 0)
+      };
+      let facts = raw?.facts || createFacts(settings.maxAddend);
+      const expectedCount = (Number(settings.maxAddend) + 1) * (Number(settings.maxAddend) + 1);
+      if (Object.keys(facts).length !== expectedCount) {
+        facts = createFacts(settings.maxAddend);
+      }
+      for (const fact of Object.values(facts)) {
+        if (typeof fact.totalResponseMs !== 'number') fact.totalResponseMs = 0;
+        if (!('fastestMs' in fact)) fact.fastestMs = null;
+        if (!('slowestMs' in fact)) fact.slowestMs = null;
+      }
+      return { settings, lifetime, facts };
+    }
+
+    function loadState() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) return normalizeState(JSON.parse(saved));
+
+        const older = localStorage.getItem('addition-practice-v2');
+        if (older) return normalizeState(JSON.parse(older));
+      } catch {}
+      return normalizeState(null);
+    }
 
     const el = {
       sessionRight: document.getElementById('sessionRight'),
@@ -376,45 +513,16 @@
       timeLimit: document.getElementById('timeLimit'),
       maxAddend: document.getElementById('maxAddend'),
       repeatsBias: document.getElementById('repeatsBias'),
+      inputMode: document.getElementById('inputMode'),
       lifeTotal: document.getElementById('lifeTotal'),
       lifeAccuracy: document.getElementById('lifeAccuracy'),
       lifeSessions: document.getElementById('lifeSessions'),
+      lifeStars: document.getElementById('lifeStars'),
       hardestFact: document.getElementById('hardestFact'),
-      factTable: document.getElementById('factTable')
+      factTable: document.getElementById('factTable'),
+      numpad: document.getElementById('numpad'),
+      celebrationLayer: document.getElementById('celebrationLayer')
     };
-
-    function createFacts(maxAddend = 10) {
-      const facts = {};
-      for (let a = 0; a <= maxAddend; a++) {
-        for (let b = 0; b <= maxAddend; b++) {
-          const key = `${a}+${b}`;
-          facts[key] = { a, b, correct: 0, wrong: 0, shown: 0, totalResponseMs: 0, fastestMs: null, slowestMs: null };
-        }
-      }
-      return facts;
-    }
-
-    function loadState() {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (!saved) {
-        return {
-          settings: { timeLimit: 10, maxAddend: 10, repeatsBias: 2.5 },
-          lifetime: { sessions: 0, correct: 0, wrong: 0 },
-          facts: createFacts(10)
-        };
-      }
-      try {
-        const parsed = JSON.parse(saved);
-        if (!parsed.facts) parsed.facts = createFacts(parsed.settings?.maxAddend || 10);
-        return parsed;
-      } catch {
-        return {
-          settings: { timeLimit: 10, maxAddend: 10, repeatsBias: 2.5 },
-          lifetime: { sessions: 0, correct: 0, wrong: 0 },
-          facts: createFacts(10)
-        };
-      }
-    }
 
     let app = loadState();
     let session = freshSession();
@@ -438,20 +546,6 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(app));
     }
 
-    function resetFactsForMax(maxAddend) {
-      app.facts = createFacts(maxAddend);
-      saveState();
-    }
-
-    function ensureFactsMatchSettings() {
-      const desiredMax = Number(app.settings.maxAddend || 10);
-      const keys = Object.keys(app.facts || {});
-      const expectedCount = (desiredMax + 1) * (desiredMax + 1);
-      if (keys.length !== expectedCount) {
-        resetFactsForMax(desiredMax);
-      }
-    }
-
     function accuracy(correct, wrong) {
       const total = correct + wrong;
       return total ? Math.round((correct / total) * 100) : 0;
@@ -459,6 +553,11 @@
 
     function factKey(a, b) {
       return `${a}+${b}`;
+    }
+
+    function resetFactsForMax(maxAddend) {
+      app.facts = createFacts(maxAddend);
+      saveState();
     }
 
     function getFactWeight(fact) {
@@ -484,17 +583,41 @@
       return pool[pool.length - 1];
     }
 
+    function syncInputMode() {
+      const useNumpad = app.settings.inputMode === 'numpad';
+      el.inputMode.value = app.settings.inputMode;
+      el.answerForm.classList.toggle('hidden', useNumpad);
+      el.numpad.classList.toggle('hidden', !useNumpad);
+      el.answerInput.disabled = paused || useNumpad;
+      el.submitBtn.disabled = paused;
+      if (!paused && !useNumpad) el.answerInput.focus();
+    }
+
+    function celebrateCorrect() {
+      const pieces = 12;
+      const colors = ['#ff5fa2', '#7c5cff', '#34d399', '#ff9f43', '#5cc8ff'];
+      for (let i = 0; i < pieces; i++) {
+        const bit = document.createElement('div');
+        bit.className = 'confetti';
+        bit.style.left = `${10 + Math.random() * 80}%`;
+        bit.style.background = colors[i % colors.length];
+        bit.style.animationDelay = `${Math.random() * 120}ms`;
+        el.celebrationLayer.appendChild(bit);
+        setTimeout(() => bit.remove(), 1100);
+      }
+    }
+
     function showFact(fact) {
       currentFact = fact;
       el.problemText.textContent = `${fact.a} + ${fact.b}`;
       el.feedback.textContent = '';
       el.feedback.className = 'feedback';
       el.answerInput.value = '';
-      el.answerInput.focus();
       el.roundState.textContent = 'Solve it before time runs out.';
       fact.shown += 1;
       roundStartedAt = Date.now();
       startTimer();
+      syncInputMode();
       render();
     }
 
@@ -546,7 +669,9 @@
         currentFact.correct += 1;
         session.correct += 1;
         app.lifetime.correct += 1;
-        el.feedback.textContent = message;
+        app.lifetime.stars += 1;
+        celebrateCorrect();
+        el.feedback.textContent = `${message} ⭐`;
         el.feedback.className = 'feedback good';
       } else {
         currentFact.wrong += 1;
@@ -566,10 +691,26 @@
     function handleSubmit(evt) {
       evt.preventDefault();
       if (!currentFact || paused) return;
-      const answer = Number(el.answerInput.value);
+      const raw = el.answerInput.value.trim();
+      const cleaned = raw.replace(/[^0-9]/g, '');
+      el.answerInput.value = cleaned;
+      if (cleaned === '') return;
+      const answer = Number(cleaned);
       const correctAnswer = currentFact.a + currentFact.b;
-      if (Number.isNaN(answer)) return;
       handleResult(answer === correctAnswer, answer === correctAnswer ? 'Nice job!' : `Oops — the answer was ${correctAnswer}.`);
+    }
+
+    function handlePadPress(value) {
+      if (paused) return;
+      if (value === 'clear') {
+        el.answerInput.value = '';
+        return;
+      }
+      if (value === 'ok') {
+        handleSubmit({ preventDefault() {} });
+        return;
+      }
+      el.answerInput.value = `${el.answerInput.value}${value}`.slice(0, 3);
     }
 
     function handleTimeout() {
@@ -580,8 +721,7 @@
 
     function startGame() {
       paused = false;
-      el.answerInput.disabled = false;
-      el.submitBtn.disabled = false;
+      syncInputMode();
       el.roundState.textContent = 'Game on!';
       nextRound();
     }
@@ -589,6 +729,7 @@
     function pauseGame() {
       paused = true;
       stopTimer();
+      syncInputMode();
       el.roundState.textContent = 'Paused.';
     }
 
@@ -598,6 +739,7 @@
       el.feedback.textContent = '';
       el.feedback.className = 'feedback';
       el.problemText.textContent = '3 + 4';
+      el.answerInput.value = '';
       el.countdownNumber.textContent = String(app.settings.timeLimit || 10);
       el.roundState.textContent = 'Press start to begin.';
       render();
@@ -606,7 +748,7 @@
     function resetSavedData() {
       app = {
         settings: { ...app.settings },
-        lifetime: { sessions: 0, correct: 0, wrong: 0 },
+        lifetime: { sessions: 0, correct: 0, wrong: 0, stars: 0 },
         facts: createFacts(Number(app.settings.maxAddend || 10))
       };
       session = freshSession();
@@ -668,6 +810,7 @@
       el.lifeTotal.textContent = lifeTotal;
       el.lifeAccuracy.textContent = `${accuracy(app.lifetime.correct, app.lifetime.wrong)}%`;
       el.lifeSessions.textContent = app.lifetime.sessions;
+      el.lifeStars.textContent = `⭐ ${app.lifetime.stars || 0}`;
       el.hardestFact.textContent = hardestFact();
       renderFactTable();
     }
@@ -677,12 +820,27 @@
       app.settings.timeLimit = Number(el.timeLimit.value);
       app.settings.maxAddend = Number(el.maxAddend.value);
       app.settings.repeatsBias = Number(el.repeatsBias.value);
+      app.settings.inputMode = el.inputMode.value;
       if (oldMax !== app.settings.maxAddend) {
         resetFactsForMax(app.settings.maxAddend);
       }
       saveState();
+      syncInputMode();
       render();
     }
+
+    el.answerInput.addEventListener('input', () => {
+      const cleaned = el.answerInput.value.replace(/[^0-9]/g, '');
+      if (el.answerInput.value !== cleaned) {
+        el.answerInput.value = cleaned;
+      }
+    });
+
+    el.numpad.addEventListener('click', (evt) => {
+      const btn = evt.target.closest('[data-pad]');
+      if (!btn) return;
+      handlePadPress(btn.dataset.pad);
+    });
 
     el.answerForm.addEventListener('submit', handleSubmit);
     el.startBtn.addEventListener('click', () => {
@@ -708,18 +866,21 @@
       const ok = confirm('Reset all saved progress on this device?');
       if (ok) resetSavedData();
     });
-    [el.timeLimit, el.maxAddend, el.repeatsBias].forEach(input => {
+    [el.timeLimit, el.maxAddend, el.repeatsBias, el.inputMode].forEach(input => {
       input.addEventListener('change', applySettingsFromUI);
     });
 
     function boot() {
-      ensureFactsMatchSettings();
+      app = normalizeState(app);
       el.timeLimit.value = String(app.settings.timeLimit || 10);
       el.maxAddend.value = String(app.settings.maxAddend || 10);
       el.repeatsBias.value = String(app.settings.repeatsBias || 2.5);
+      el.inputMode.value = app.settings.inputMode || 'keyboard';
       el.answerInput.disabled = true;
       el.submitBtn.disabled = true;
       el.countdownNumber.textContent = String(app.settings.timeLimit || 10);
+      syncInputMode();
+      saveState();
       render();
     }
 
