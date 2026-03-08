@@ -524,7 +524,7 @@
     function handleTimeout() { if (!currentFact || paused) return; const correctAnswer = currentFact.a + currentFact.b; handleResult(false, `Time’s up — it was ${correctAnswer}.`); }
     function startGame() { paused = false; syncInputMode(); el.roundState.textContent = 'Game on!'; nextRound(); }
     function pauseGame() { paused = true; stopTimer(); syncInputMode(); el.roundState.textContent = 'Paused.'; persistProgress(); }
-    function saveCompletedSession() { if (!session.started || session.asked === 0 || !session.startedAt) return; finalizeCurrentSessionHistory(); saveState(); }
+    function saveCompletedSession() { if (!session.started || !session.startedAt) return; finalizeCurrentSessionHistory(); saveState(); }
     function newSession() { saveCompletedSession(); paused = true; stopTimer(); session = freshSession(); currentFact = null; el.feedback.textContent = ''; el.feedback.className = 'feedback'; el.problemText.textContent = '3 + 4'; el.answerInput.value = ''; updatePadDisplay(); el.countdownNumber.textContent = String(app.settings.timeLimit || 10); el.roundState.textContent = 'Press start to begin.'; syncInputMode(); render(); }
     function resetSavedData() { app = { settings: { ...defaultSettings, ...app.settings }, lifetime: { sessions: 0, correct: 0, wrong: 0, stars: 0, sessionHistory: [] }, facts: createFacts(Number(app.settings.maxAddend || 10)) }; session = freshSession(); currentFact = null; paused = true; saveState(); el.feedback.textContent = ''; el.feedback.className = 'feedback'; el.problemText.textContent = '3 + 4'; el.answerInput.value = ''; updatePadDisplay(); el.countdownNumber.textContent = String(app.settings.timeLimit || 10); el.roundState.textContent = 'Press start to begin.'; syncInputMode(); render(); }
     function hardestFact() { const facts = scoreFacts(Object.values(app.facts)); return facts.length ? `${facts[0].a}+${facts[0].b}` : '—'; }
@@ -544,8 +544,9 @@
     el.resetStatsBtn.addEventListener('click', () => { const ok = confirm('Reset all saved progress on this device?'); if (ok) resetSavedData(); });
     [el.timeLimit, el.maxAddend, el.repeatsBias, el.inputMode].forEach(input => input.addEventListener('change', applySettingsFromUI));
     window.addEventListener('beforeunload', () => { if (session.started) { upsertCurrentSessionHistory(); saveState(); } });
+    window.addEventListener('pagehide', () => { if (session.started) { upsertCurrentSessionHistory(); saveState(); } });
     document.addEventListener('visibilitychange', () => { if (document.hidden && session.started) { upsertCurrentSessionHistory(); saveState(); } });
-    function boot() { app = normalizeState(app); app.lifetime.sessionHistory = normalizeSessionHistory(app.lifetime.sessionHistory).filter(item => !item.isCurrent); el.timeLimit.value = String(app.settings.timeLimit || 10); el.maxAddend.value = String(app.settings.maxAddend || 10); el.repeatsBias.value = String(app.settings.repeatsBias || 2.5); el.inputMode.value = app.settings.inputMode || 'numpad'; el.answerInput.disabled = true; el.submitBtn.disabled = true; updatePadDisplay(); el.countdownNumber.textContent = String(app.settings.timeLimit || 10); syncInputMode(); saveState(); render(); }
+    function boot() { app = normalizeState(app); el.timeLimit.value = String(app.settings.timeLimit || 10); el.maxAddend.value = String(app.settings.maxAddend || 10); el.repeatsBias.value = String(app.settings.repeatsBias || 2.5); el.inputMode.value = app.settings.inputMode || 'numpad'; el.answerInput.disabled = true; el.submitBtn.disabled = true; updatePadDisplay(); el.countdownNumber.textContent = String(app.settings.timeLimit || 10); syncInputMode(); saveState(); render(); }
     boot();
   </script>
 </body>
