@@ -36,7 +36,7 @@
       min-height: 100vh;
     }
     .app {
-      max-width: 1080px;
+      max-width: 1180px;
       margin: 0 auto;
       padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
     }
@@ -56,7 +56,7 @@
     }
     .layout {
       display: grid;
-      grid-template-columns: 1.2fr .8fr;
+      grid-template-columns: 1.1fr .9fr;
       gap: 18px;
     }
     .panel {
@@ -177,7 +177,7 @@
       background: linear-gradient(135deg, #ef4444, #dc2626);
       box-shadow: 0 10px 24px rgba(220, 38, 38, .18);
     }
-    .controls, .settings, .history, .table-wrap {
+    .controls, .settings, .history, .table-wrap, .parent-panel {
       display: grid;
       gap: 12px;
     }
@@ -226,6 +226,7 @@
       padding: 8px;
       border-bottom: 1px solid #eef0f5;
       text-align: left;
+      vertical-align: top;
     }
     th { color: var(--muted); font-size: .85rem; }
     .pill {
@@ -300,12 +301,30 @@
       0% { transform: translateY(-10px) rotate(0deg) scale(1); opacity: 1; }
       100% { transform: translateY(180px) rotate(220deg) scale(.7); opacity: 0; }
     }
+    .session-detail {
+      font-size: .8rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .current-session-row {
+      background: #fff8d9;
+    }
+    .current-pill {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #efe9ff;
+      font-size: .75rem;
+      font-weight: 800;
+      color: #5b34f2;
+    }
     .empty {
       color: var(--muted);
       text-align: center;
       padding: 12px;
     }
-    @media (max-width: 860px) {
+    @media (max-width: 920px) {
       .layout { grid-template-columns: 1fr; }
       .stats { grid-template-columns: repeat(2, 1fr); }
       .card { min-height: 360px; }
@@ -414,7 +433,7 @@
             </div>
             <select id="inputMode">
               <option value="keyboard">Keyboard</option>
-              <option value="numpad">Number pad</option>
+              <option value="numpad" selected>Number pad</option>
             </select>
           </div>
         </div>
@@ -433,6 +452,30 @@
           </div>
         </div>
 
+        <div class="parent-panel" style="margin-top:18px;">
+          <div class="controls-row" style="justify-content:space-between; align-items:center;">
+            <h2 style="margin:0;">Parent View</h2>
+            <button id="toggleParentBtn" type="button" class="secondary">Show Parent View</button>
+          </div>
+          <div id="parentView" class="hidden">
+            <div class="history-grid">
+              <div class="mini"><div class="k">Sessions Saved</div><div class="v" id="historyCount">0</div></div>
+              <div class="mini"><div class="k">Avg Session Accuracy</div><div class="v" id="historyAvgAccuracy">0%</div></div>
+              <div class="mini"><div class="k">Avg Problems / Session</div><div class="v" id="historyAvgProblems">0</div></div>
+              <div class="mini"><div class="k">Avg Duration</div><div class="v" id="historyAvgDuration">0s</div></div>
+            </div>
+            <div class="table-wrap">
+              <h3 style="margin:0 0 4px;">Recent Sessions</h3>
+              <table>
+                <thead>
+                  <tr><th>Started</th><th>Duration</th><th>Done</th><th>Correct</th><th>Accuracy</th><th>Hardest</th></tr>
+                </thead>
+                <tbody id="sessionTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <div class="table-wrap" style="margin-top:18px;">
           <h2 style="margin:0 0 4px;">Most Missed Facts</h2>
           <div class="hint">The app stores progress in the browser on this device.</div>
@@ -448,474 +491,61 @@
   </div>
 
   <script>
-    const STORAGE_KEY = 'addition-practice-v3';
-
-    const defaultSettings = {
-      timeLimit: 10,
-      maxAddend: 10,
-      repeatsBias: 2.5,
-      inputMode: 'keyboard'
-    };
-
-    function createFacts(maxAddend = 10) {
-      const facts = {};
-      for (let a = 0; a <= maxAddend; a++) {
-        for (let b = 0; b <= maxAddend; b++) {
-          const key = `${a}+${b}`;
-          facts[key] = {
-            a,
-            b,
-            correct: 0,
-            wrong: 0,
-            shown: 0,
-            totalResponseMs: 0,
-            fastestMs: null,
-            slowestMs: null
-          };
-        }
-      }
-      return facts;
-    }
-
-    function normalizeState(raw) {
-      const settings = { ...defaultSettings, ...(raw?.settings || {}) };
-      const lifetime = {
-        sessions: Number(raw?.lifetime?.sessions || 0),
-        correct: Number(raw?.lifetime?.correct || 0),
-        wrong: Number(raw?.lifetime?.wrong || 0),
-        stars: Number(raw?.lifetime?.stars || 0)
-      };
-      let facts = raw?.facts || createFacts(settings.maxAddend);
-      const expectedCount = (Number(settings.maxAddend) + 1) * (Number(settings.maxAddend) + 1);
-      if (Object.keys(facts).length !== expectedCount) {
-        facts = createFacts(settings.maxAddend);
-      }
-      for (const fact of Object.values(facts)) {
-        if (typeof fact.totalResponseMs !== 'number') fact.totalResponseMs = 0;
-        if (!('fastestMs' in fact)) fact.fastestMs = null;
-        if (!('slowestMs' in fact)) fact.slowestMs = null;
-      }
-      return { settings, lifetime, facts };
-    }
-
-    function loadState() {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) return normalizeState(JSON.parse(saved));
-
-        const older = localStorage.getItem('addition-practice-v2');
-        if (older) return normalizeState(JSON.parse(older));
-      } catch {}
-      return normalizeState(null);
-    }
-
-    const el = {
-      sessionRight: document.getElementById('sessionRight'),
-      sessionWrong: document.getElementById('sessionWrong'),
-      sessionTotal: document.getElementById('sessionTotal'),
-      sessionAccuracy: document.getElementById('sessionAccuracy'),
-      problemText: document.getElementById('problemText'),
-      feedback: document.getElementById('feedback'),
-      roundState: document.getElementById('roundState'),
-      timerBar: document.getElementById('timerBar'),
-      countdownNumber: document.getElementById('countdownNumber'),
-      answerForm: document.getElementById('answerForm'),
-      answerInput: document.getElementById('answerInput'),
-      submitBtn: document.getElementById('submitBtn'),
-      startBtn: document.getElementById('startBtn'),
-      pauseBtn: document.getElementById('pauseBtn'),
-      skipBtn: document.getElementById('skipBtn'),
-      newSessionBtn: document.getElementById('newSessionBtn'),
-      resetStatsBtn: document.getElementById('resetStatsBtn'),
-      timeLimit: document.getElementById('timeLimit'),
-      maxAddend: document.getElementById('maxAddend'),
-      repeatsBias: document.getElementById('repeatsBias'),
-      inputMode: document.getElementById('inputMode'),
-      lifeTotal: document.getElementById('lifeTotal'),
-      lifeAccuracy: document.getElementById('lifeAccuracy'),
-      lifeSessions: document.getElementById('lifeSessions'),
-      lifeStars: document.getElementById('lifeStars'),
-      hardestFact: document.getElementById('hardestFact'),
-      factTable: document.getElementById('factTable'),
-      numpad: document.getElementById('numpad'),
-      celebrationLayer: document.getElementById('celebrationLayer'),
-      padDisplay: document.getElementById('padDisplay')
-    };
-
-    let app = loadState();
-    let session = freshSession();
-    let currentFact = null;
-    let timer = null;
-    let deadline = 0;
-    let roundStartedAt = 0;
-    let paused = true;
-
-    function freshSession() {
-      return {
-        started: false,
-        correct: 0,
-        wrong: 0,
-        asked: 0,
-        answeredFacts: []
-      };
-    }
-
-    function saveState() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(app));
-    }
-
-    function accuracy(correct, wrong) {
-      const total = correct + wrong;
-      return total ? Math.round((correct / total) * 100) : 0;
-    }
-
-    function factKey(a, b) {
-      return `${a}+${b}`;
-    }
-
-    function resetFactsForMax(maxAddend) {
-      app.facts = createFacts(maxAddend);
-      saveState();
-    }
-
-    function getFactWeight(fact) {
-      const bias = Number(app.settings.repeatsBias || 2.5);
-      const attempts = fact.correct + fact.wrong;
-      const missRate = attempts ? fact.wrong / attempts : 0.35;
-      const avgResponseMs = attempts ? fact.totalResponseMs / attempts : Number(app.settings.timeLimit || 10) * 1000 * 0.75;
-      const timeLimitMs = Number(app.settings.timeLimit || 10) * 1000;
-      const slowRatio = Math.min(1.5, avgResponseMs / Math.max(1000, timeLimitMs * 0.7));
-      const recentBoost = session.answeredFacts.includes(factKey(fact.a, fact.b)) ? 0.85 : 1;
-      return (1 + fact.wrong * bias + missRate * 5 + slowRatio * 2 + (attempts === 0 ? 2 : 0.2)) * recentBoost;
-    }
-
-    function pickNextFact() {
-      const pool = Object.values(app.facts);
-      const weights = pool.map(getFactWeight);
-      const totalWeight = weights.reduce((sum, w) => sum + w, 0);
-      let roll = Math.random() * totalWeight;
-      for (let i = 0; i < pool.length; i++) {
-        roll -= weights[i];
-        if (roll <= 0) return pool[i];
-      }
-      return pool[pool.length - 1];
-    }
-
-    function syncInputMode() {
-      const useNumpad = app.settings.inputMode === 'numpad';
-      el.inputMode.value = app.settings.inputMode;
-      el.answerForm.classList.toggle('hidden', useNumpad);
-      el.numpad.classList.toggle('hidden', !useNumpad);
-      el.padDisplay.classList.toggle('hidden', !useNumpad);
-      el.answerInput.disabled = paused || useNumpad;
-      el.submitBtn.disabled = paused;
-      updatePadDisplay();
-      if (!paused && !useNumpad) el.answerInput.focus();
-    }
-
-    function celebrateCorrect() {
-      const pieces = 12;
-      const colors = ['#ff5fa2', '#7c5cff', '#34d399', '#ff9f43', '#5cc8ff'];
-      for (let i = 0; i < pieces; i++) {
-        const bit = document.createElement('div');
-        bit.className = 'confetti';
-        bit.style.left = `${10 + Math.random() * 80}%`;
-        bit.style.background = colors[i % colors.length];
-        bit.style.animationDelay = `${Math.random() * 120}ms`;
-        el.celebrationLayer.appendChild(bit);
-        setTimeout(() => bit.remove(), 1100);
-      }
-    }
-
-    function showFact(fact) {
-      currentFact = fact;
-      el.problemText.textContent = `${fact.a} + ${fact.b}`;
-      el.feedback.textContent = '';
-      el.feedback.className = 'feedback';
-      el.answerInput.value = '';
-      updatePadDisplay();
-      el.roundState.textContent = 'Solve it before time runs out.';
-      fact.shown += 1;
-      roundStartedAt = Date.now();
-      startTimer();
-      syncInputMode();
-      render();
-    }
-
-    function nextRound() {
-      if (paused) return;
-      if (!session.started) {
-        session.started = true;
-        app.lifetime.sessions += 1;
-      }
-      showFact(pickNextFact());
-    }
-
-    function startTimer() {
-      clearInterval(timer);
-      const limitMs = Number(app.settings.timeLimit || 10) * 1000;
-      deadline = Date.now() + limitMs;
-      el.timerBar.style.width = '100%';
-      el.countdownNumber.textContent = String(Math.ceil(limitMs / 1000));
-      timer = setInterval(() => {
-        const remaining = Math.max(0, deadline - Date.now());
-        const pct = (remaining / limitMs) * 100;
-        el.timerBar.style.width = `${pct}%`;
-        el.countdownNumber.textContent = String(Math.ceil(remaining / 1000));
-        if (remaining <= 0) {
-          clearInterval(timer);
-          handleTimeout();
-        }
-      }, 100);
-    }
-
-    function stopTimer() {
-      clearInterval(timer);
-      el.timerBar.style.width = '0%';
-    }
-
-    function handleResult(isCorrect, message) {
-      stopTimer();
-      session.asked += 1;
-      const responseMs = Math.max(0, Date.now() - roundStartedAt);
-      const key = factKey(currentFact.a, currentFact.b);
-      session.answeredFacts.push(key);
-      if (session.answeredFacts.length > 8) session.answeredFacts.shift();
-
-      currentFact.totalResponseMs += responseMs;
-      currentFact.fastestMs = currentFact.fastestMs === null ? responseMs : Math.min(currentFact.fastestMs, responseMs);
-      currentFact.slowestMs = currentFact.slowestMs === null ? responseMs : Math.max(currentFact.slowestMs, responseMs);
-
-      if (isCorrect) {
-        currentFact.correct += 1;
-        session.correct += 1;
-        app.lifetime.correct += 1;
-        app.lifetime.stars += 1;
-        celebrateCorrect();
-        el.feedback.textContent = `${message} ⭐`;
-        el.feedback.className = 'feedback good';
-      } else {
-        currentFact.wrong += 1;
-        session.wrong += 1;
-        app.lifetime.wrong += 1;
-        el.feedback.textContent = message;
-        el.feedback.className = 'feedback bad';
-      }
-
-      saveState();
-      render();
-      setTimeout(() => {
-        if (!paused) nextRound();
-      }, 900);
-    }
-
-    function handleSubmit(evt) {
-      evt.preventDefault();
-      if (!currentFact || paused) return;
-      const raw = el.answerInput.value.trim();
-      const cleaned = raw.replace(/[^0-9]/g, '');
-      el.answerInput.value = cleaned;
-      if (cleaned === '') return;
-      const answer = Number(cleaned);
-      const correctAnswer = currentFact.a + currentFact.b;
-      handleResult(answer === correctAnswer, answer === correctAnswer ? 'Nice job!' : `Oops — the answer was ${correctAnswer}.`);
-    }
-
-    function updatePadDisplay() {
-      const value = el.answerInput.value || '0';
-      el.padDisplay.textContent = value;
-    }
-
-    function handlePadPress(value) {
-      if (paused) return;
-      if (value === 'clear') {
-        el.answerInput.value = '';
-        updatePadDisplay();
-        return;
-      }
-      if (value === 'ok') {
-        handleSubmit({ preventDefault() {} });
-        updatePadDisplay();
-        return;
-      }
-      el.answerInput.value = `${el.answerInput.value}${value}`.slice(0, 3);
-      updatePadDisplay();
-    }
-
-    function handleTimeout() {
-      if (!currentFact || paused) return;
-      const correctAnswer = currentFact.a + currentFact.b;
-      handleResult(false, `Time’s up — it was ${correctAnswer}.`);
-    }
-
-    function startGame() {
-      paused = false;
-      syncInputMode();
-      el.roundState.textContent = 'Game on!';
-      nextRound();
-    }
-
-    function pauseGame() {
-      paused = true;
-      stopTimer();
-      syncInputMode();
-      el.roundState.textContent = 'Paused.';
-    }
-
-    function newSession() {
-      pauseGame();
-      session = freshSession();
-      el.feedback.textContent = '';
-      el.feedback.className = 'feedback';
-      el.problemText.textContent = '3 + 4';
-      el.answerInput.value = '';
-      updatePadDisplay();
-      el.countdownNumber.textContent = String(app.settings.timeLimit || 10);
-      el.roundState.textContent = 'Press start to begin.';
-      render();
-    }
-
-    function resetSavedData() {
-      app = {
-        settings: { ...app.settings },
-        lifetime: { sessions: 0, correct: 0, wrong: 0, stars: 0 },
-        facts: createFacts(Number(app.settings.maxAddend || 10))
-      };
-      session = freshSession();
-      paused = true;
-      saveState();
-      newSession();
-    }
-
-    function hardestFact() {
-      const facts = Object.values(app.facts).filter(f => (f.correct + f.wrong) > 0);
-      if (!facts.length) return '—';
-      facts.sort((a, b) => {
-        const aAttempts = a.correct + a.wrong;
-        const bAttempts = b.correct + b.wrong;
-        const aScore = (a.wrong / aAttempts) * 0.7 + ((a.totalResponseMs / aAttempts) / 10000) * 0.3;
-        const bScore = (b.wrong / bAttempts) * 0.7 + ((b.totalResponseMs / bAttempts) / 10000) * 0.3;
-        return bScore - aScore;
-      });
-      return `${facts[0].a}+${facts[0].b}`;
-    }
-
-    function renderFactTable() {
-      const facts = Object.values(app.facts)
-        .filter(f => (f.correct + f.wrong) > 0)
-        .sort((a, b) => {
-          const aAttempts = a.correct + a.wrong;
-          const bAttempts = b.correct + b.wrong;
-          const aScore = (a.wrong / aAttempts) * 0.7 + ((a.totalResponseMs / aAttempts) / 10000) * 0.3;
-          const bScore = (b.wrong / bAttempts) * 0.7 + ((b.totalResponseMs / bAttempts) / 10000) * 0.3;
-          return bScore - aScore;
-        })
-        .slice(0, 8);
-
-      if (!facts.length) {
-        el.factTable.innerHTML = `<tr><td colspan="4" class="empty">No saved answers yet.</td></tr>`;
-        return;
-      }
-
-      el.factTable.innerHTML = facts.map(f => {
-        const attempts = f.correct + f.wrong;
-        const rate = accuracy(f.correct, f.wrong);
-        const avgSec = attempts ? ((f.totalResponseMs / attempts) / 1000).toFixed(1) : '0.0';
-        return `<tr>
-          <td><span class="pill">${f.a} + ${f.b}</span><div class="hint">avg ${avgSec}s</div></td>
-          <td>${f.correct}</td>
-          <td>${f.wrong}</td>
-          <td>${rate}%</td>
-        </tr>`;
-      }).join('');
-    }
-
-    function render() {
-      el.sessionRight.textContent = session.correct;
-      el.sessionWrong.textContent = session.wrong;
-      el.sessionTotal.textContent = session.asked;
-      el.sessionAccuracy.textContent = `${accuracy(session.correct, session.wrong)}%`;
-
-      const lifeTotal = app.lifetime.correct + app.lifetime.wrong;
-      el.lifeTotal.textContent = lifeTotal;
-      el.lifeAccuracy.textContent = `${accuracy(app.lifetime.correct, app.lifetime.wrong)}%`;
-      el.lifeSessions.textContent = app.lifetime.sessions;
-      el.lifeStars.textContent = `⭐ ${app.lifetime.stars || 0}`;
-      el.hardestFact.textContent = hardestFact();
-      renderFactTable();
-    }
-
-    function applySettingsFromUI() {
-      const oldMax = app.settings.maxAddend;
-      app.settings.timeLimit = Number(el.timeLimit.value);
-      app.settings.maxAddend = Number(el.maxAddend.value);
-      app.settings.repeatsBias = Number(el.repeatsBias.value);
-      app.settings.inputMode = el.inputMode.value;
-      if (oldMax !== app.settings.maxAddend) {
-        resetFactsForMax(app.settings.maxAddend);
-      }
-      saveState();
-      syncInputMode();
-      render();
-    }
-
-    el.answerInput.addEventListener('input', () => {
-      const cleaned = el.answerInput.value.replace(/[^0-9]/g, '');
-      if (el.answerInput.value !== cleaned) {
-        el.answerInput.value = cleaned;
-      }
-      updatePadDisplay();
-    });
-
-    el.numpad.addEventListener('click', (evt) => {
-      const btn = evt.target.closest('[data-pad]');
-      if (!btn) return;
-      handlePadPress(btn.dataset.pad);
-    });
-
+    const STORAGE_KEY = 'addition-practice-v5';
+    const defaultSettings = { timeLimit: 10, maxAddend: 10, repeatsBias: 2.5, inputMode: 'numpad' };
+    function createFacts(maxAddend = 10) { const facts = {}; for (let a = 0; a <= maxAddend; a++) { for (let b = 0; b <= maxAddend; b++) { const key = `${a}+${b}`; facts[key] = { a, b, correct: 0, wrong: 0, shown: 0, totalResponseMs: 0, fastestMs: null, slowestMs: null }; } } return facts; }
+    function normalizeSessionHistory(history) { if (!Array.isArray(history)) return []; return history.filter(Boolean).map(item => ({ id: item.id || `session-${item.startedAt || Date.now()}-${Math.random().toString(36).slice(2, 7)}`, startedAt: Number(item.startedAt || Date.now()), durationMs: Number(item.durationMs || 0), problemsCompleted: Number(item.problemsCompleted || 0), correct: Number(item.correct || 0), wrong: Number(item.wrong || 0), accuracy: Number(item.accuracy || 0), hardestFacts: Array.isArray(item.hardestFacts) ? item.hardestFacts : [], isCurrent: Boolean(item.isCurrent) })).slice(0, 100); }
+    function normalizeState(raw) { const settings = { ...defaultSettings, ...(raw?.settings || {}) }; const lifetime = { sessions: Number(raw?.lifetime?.sessions || 0), correct: Number(raw?.lifetime?.correct || 0), wrong: Number(raw?.lifetime?.wrong || 0), stars: Number(raw?.lifetime?.stars || 0), sessionHistory: Array.isArray(raw?.lifetime?.sessionHistory) ? raw.lifetime.sessionHistory : [] }; let facts = raw?.facts || createFacts(settings.maxAddend); const expectedCount = (Number(settings.maxAddend) + 1) * (Number(settings.maxAddend) + 1); if (Object.keys(facts).length !== expectedCount) facts = createFacts(settings.maxAddend); for (const fact of Object.values(facts)) { if (typeof fact.totalResponseMs !== 'number') fact.totalResponseMs = 0; if (!('fastestMs' in fact)) fact.fastestMs = null; if (!('slowestMs' in fact)) fact.slowestMs = null; } lifetime.sessionHistory = normalizeSessionHistory(lifetime.sessionHistory); return { settings, lifetime, facts }; }
+    function loadState() { try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) return normalizeState(JSON.parse(saved)); const olderKeys = ['addition-practice-v4','addition-practice-v3','addition-practice-v2','addition-practice-v1']; for (const key of olderKeys) { const older = localStorage.getItem(key); if (older) return normalizeState(JSON.parse(older)); } } catch {} return normalizeState(null); }
+    const el = { sessionRight: document.getElementById('sessionRight'), sessionWrong: document.getElementById('sessionWrong'), sessionTotal: document.getElementById('sessionTotal'), sessionAccuracy: document.getElementById('sessionAccuracy'), problemText: document.getElementById('problemText'), feedback: document.getElementById('feedback'), roundState: document.getElementById('roundState'), timerBar: document.getElementById('timerBar'), countdownNumber: document.getElementById('countdownNumber'), answerForm: document.getElementById('answerForm'), answerInput: document.getElementById('answerInput'), submitBtn: document.getElementById('submitBtn'), startBtn: document.getElementById('startBtn'), pauseBtn: document.getElementById('pauseBtn'), skipBtn: document.getElementById('skipBtn'), newSessionBtn: document.getElementById('newSessionBtn'), resetStatsBtn: document.getElementById('resetStatsBtn'), timeLimit: document.getElementById('timeLimit'), maxAddend: document.getElementById('maxAddend'), repeatsBias: document.getElementById('repeatsBias'), inputMode: document.getElementById('inputMode'), lifeTotal: document.getElementById('lifeTotal'), lifeAccuracy: document.getElementById('lifeAccuracy'), lifeSessions: document.getElementById('lifeSessions'), lifeStars: document.getElementById('lifeStars'), hardestFact: document.getElementById('hardestFact'), factTable: document.getElementById('factTable'), numpad: document.getElementById('numpad'), celebrationLayer: document.getElementById('celebrationLayer'), padDisplay: document.getElementById('padDisplay'), toggleParentBtn: document.getElementById('toggleParentBtn'), parentView: document.getElementById('parentView'), historyCount: document.getElementById('historyCount'), historyAvgAccuracy: document.getElementById('historyAvgAccuracy'), historyAvgProblems: document.getElementById('historyAvgProblems'), historyAvgDuration: document.getElementById('historyAvgDuration'), sessionTable: document.getElementById('sessionTable') };
+    let app = loadState(), session = freshSession(), currentFact = null, timer = null, deadline = 0, roundStartedAt = 0, paused = true;
+    function freshSession() { return { id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, started: false, startedAt: null, correct: 0, wrong: 0, asked: 0, answeredFacts: [], factsSeen: {} }; }
+    function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(app)); }
+    function accuracy(correct, wrong) { const total = correct + wrong; return total ? Math.round((correct / total) * 100) : 0; }
+    function factKey(a, b) { return `${a}+${b}`; }
+    function resetFactsForMax(maxAddend) { app.facts = createFacts(maxAddend); saveState(); }
+    function getFactWeight(fact) { const bias = Number(app.settings.repeatsBias || 2.5), attempts = fact.correct + fact.wrong, missRate = attempts ? fact.wrong / attempts : 0.35, avgResponseMs = attempts ? fact.totalResponseMs / attempts : Number(app.settings.timeLimit || 10) * 1000 * 0.75, timeLimitMs = Number(app.settings.timeLimit || 10) * 1000, slowRatio = Math.min(1.5, avgResponseMs / Math.max(1000, timeLimitMs * 0.7)), recentBoost = session.answeredFacts.includes(factKey(fact.a, fact.b)) ? 0.85 : 1; return (1 + fact.wrong * bias + missRate * 5 + slowRatio * 2 + (attempts === 0 ? 2 : 0.2)) * recentBoost; }
+    function pickNextFact() { const pool = Object.values(app.facts), weights = pool.map(getFactWeight), totalWeight = weights.reduce((sum, w) => sum + w, 0); let roll = Math.random() * totalWeight; for (let i = 0; i < pool.length; i++) { roll -= weights[i]; if (roll <= 0) return pool[i]; } return pool[pool.length - 1]; }
+    function updatePadDisplay() { el.padDisplay.textContent = el.answerInput.value || '0'; }
+    function syncInputMode() { const useNumpad = app.settings.inputMode === 'numpad'; el.inputMode.value = app.settings.inputMode; el.answerForm.classList.toggle('hidden', useNumpad); el.numpad.classList.toggle('hidden', !useNumpad); el.padDisplay.classList.toggle('hidden', !useNumpad); el.answerInput.disabled = paused || useNumpad; el.submitBtn.disabled = paused; updatePadDisplay(); if (!paused && !useNumpad) el.answerInput.focus(); }
+    function celebrateCorrect() { const pieces = 12, colors = ['#ff5fa2','#7c5cff','#34d399','#ff9f43','#5cc8ff']; for (let i = 0; i < pieces; i++) { const bit = document.createElement('div'); bit.className = 'confetti'; bit.style.left = `${10 + Math.random() * 80}%`; bit.style.background = colors[i % colors.length]; bit.style.animationDelay = `${Math.random() * 120}ms`; el.celebrationLayer.appendChild(bit); setTimeout(() => bit.remove(), 1100); } }
+    function scoreFacts(items) { return items.filter(f => (f.correct + f.wrong) > 0).sort((a, b) => { const aAttempts = a.correct + a.wrong, bAttempts = b.correct + b.wrong; const aScore = (a.wrong / aAttempts) * 0.7 + ((a.totalResponseMs / aAttempts) / 10000) * 0.3; const bScore = (b.wrong / bAttempts) * 0.7 + ((b.totalResponseMs / bAttempts) / 10000) * 0.3; return bScore - aScore; }); }
+    function currentSessionSnapshot() { if (!session.started || !session.startedAt) return null; const hardest = scoreFacts(Object.values(session.factsSeen)).slice(0, 10).map(f => `${f.a}+${f.b}`); return { id: session.id, startedAt: session.startedAt, durationMs: Math.max(0, Date.now() - session.startedAt), problemsCompleted: session.asked, correct: session.correct, wrong: session.wrong, accuracy: accuracy(session.correct, session.wrong), hardestFacts: hardest, isCurrent: true }; }
+    function upsertCurrentSessionHistory() { const snapshot = currentSessionSnapshot(); if (!snapshot) return; app.lifetime.sessionHistory = normalizeSessionHistory(app.lifetime.sessionHistory).filter(item => item.id !== snapshot.id); app.lifetime.sessionHistory.unshift(snapshot); app.lifetime.sessionHistory = app.lifetime.sessionHistory.slice(0, 100); }
+    function finalizeCurrentSessionHistory() { const snapshot = currentSessionSnapshot(); if (!snapshot) return; snapshot.isCurrent = false; app.lifetime.sessionHistory = normalizeSessionHistory(app.lifetime.sessionHistory).filter(item => item.id !== snapshot.id); app.lifetime.sessionHistory.unshift(snapshot); app.lifetime.sessionHistory = app.lifetime.sessionHistory.slice(0, 100); }
+    function persistProgress() { upsertCurrentSessionHistory(); saveState(); render(); }
+    function showFact(fact) { currentFact = fact; el.problemText.textContent = `${fact.a} + ${fact.b}`; el.feedback.textContent = ''; el.feedback.className = 'feedback'; el.answerInput.value = ''; updatePadDisplay(); el.roundState.textContent = 'Solve it before time runs out.'; fact.shown += 1; roundStartedAt = Date.now(); startTimer(); syncInputMode(); render(); }
+    function nextRound() { if (paused) return; if (!session.started) { session.started = true; session.startedAt = Date.now(); app.lifetime.sessions += 1; persistProgress(); } showFact(pickNextFact()); }
+    function startTimer() { clearInterval(timer); const limitMs = Number(app.settings.timeLimit || 10) * 1000; deadline = Date.now() + limitMs; el.timerBar.style.width = '100%'; el.countdownNumber.textContent = String(Math.ceil(limitMs / 1000)); timer = setInterval(() => { const remaining = Math.max(0, deadline - Date.now()); const pct = (remaining / limitMs) * 100; el.timerBar.style.width = `${pct}%`; el.countdownNumber.textContent = String(Math.ceil(remaining / 1000)); if (remaining <= 0) { clearInterval(timer); handleTimeout(); } }, 100); }
+    function stopTimer() { clearInterval(timer); el.timerBar.style.width = '0%'; }
+    function handleResult(isCorrect, message) { stopTimer(); session.asked += 1; const responseMs = Math.max(0, Date.now() - roundStartedAt); const key = factKey(currentFact.a, currentFact.b); session.answeredFacts.push(key); if (session.answeredFacts.length > 8) session.answeredFacts.shift(); if (!session.factsSeen[key]) session.factsSeen[key] = { a: currentFact.a, b: currentFact.b, correct: 0, wrong: 0, totalResponseMs: 0 }; currentFact.totalResponseMs += responseMs; currentFact.fastestMs = currentFact.fastestMs === null ? responseMs : Math.min(currentFact.fastestMs, responseMs); currentFact.slowestMs = currentFact.slowestMs === null ? responseMs : Math.max(currentFact.slowestMs, responseMs); session.factsSeen[key].totalResponseMs += responseMs; if (isCorrect) { currentFact.correct += 1; session.correct += 1; session.factsSeen[key].correct += 1; app.lifetime.correct += 1; app.lifetime.stars += 1; celebrateCorrect(); el.feedback.textContent = `${message} ⭐`; el.feedback.className = 'feedback good'; } else { currentFact.wrong += 1; session.wrong += 1; session.factsSeen[key].wrong += 1; app.lifetime.wrong += 1; el.feedback.textContent = message; el.feedback.className = 'feedback bad'; } persistProgress(); setTimeout(() => { if (!paused) nextRound(); }, 900); }
+    function handleSubmit(evt) { evt.preventDefault(); if (paused) { el.feedback.textContent = 'Press Start to begin!'; el.feedback.className = 'feedback bad'; return; } if (!currentFact) return; const cleaned = el.answerInput.value.trim().replace(/[^0-9]/g, ''); el.answerInput.value = cleaned; updatePadDisplay(); if (cleaned === '') return; const answer = Number(cleaned), correctAnswer = currentFact.a + currentFact.b; handleResult(answer === correctAnswer, answer === correctAnswer ? 'Nice job!' : `Oops — the answer was ${correctAnswer}.`); }
+    function handlePadPress(value) { if (paused) { el.feedback.textContent = 'Press Start to begin!'; el.feedback.className = 'feedback bad'; return; } if (value === 'clear') { el.answerInput.value = ''; updatePadDisplay(); return; } if (value === 'ok') { handleSubmit({ preventDefault() {} }); updatePadDisplay(); return; } el.answerInput.value = `${el.answerInput.value}${value}`.slice(0, 3); updatePadDisplay(); }
+    function handleTimeout() { if (!currentFact || paused) return; const correctAnswer = currentFact.a + currentFact.b; handleResult(false, `Time’s up — it was ${correctAnswer}.`); }
+    function startGame() { paused = false; syncInputMode(); el.roundState.textContent = 'Game on!'; nextRound(); }
+    function pauseGame() { paused = true; stopTimer(); syncInputMode(); el.roundState.textContent = 'Paused.'; persistProgress(); }
+    function saveCompletedSession() { if (!session.started || session.asked === 0 || !session.startedAt) return; finalizeCurrentSessionHistory(); saveState(); }
+    function newSession() { saveCompletedSession(); paused = true; stopTimer(); session = freshSession(); currentFact = null; el.feedback.textContent = ''; el.feedback.className = 'feedback'; el.problemText.textContent = '3 + 4'; el.answerInput.value = ''; updatePadDisplay(); el.countdownNumber.textContent = String(app.settings.timeLimit || 10); el.roundState.textContent = 'Press start to begin.'; syncInputMode(); render(); }
+    function resetSavedData() { app = { settings: { ...defaultSettings, ...app.settings }, lifetime: { sessions: 0, correct: 0, wrong: 0, stars: 0, sessionHistory: [] }, facts: createFacts(Number(app.settings.maxAddend || 10)) }; session = freshSession(); currentFact = null; paused = true; saveState(); el.feedback.textContent = ''; el.feedback.className = 'feedback'; el.problemText.textContent = '3 + 4'; el.answerInput.value = ''; updatePadDisplay(); el.countdownNumber.textContent = String(app.settings.timeLimit || 10); el.roundState.textContent = 'Press start to begin.'; syncInputMode(); render(); }
+    function hardestFact() { const facts = scoreFacts(Object.values(app.facts)); return facts.length ? `${facts[0].a}+${facts[0].b}` : '—'; }
+    function renderFactTable() { const facts = scoreFacts(Object.values(app.facts)).slice(0, 8); if (!facts.length) { el.factTable.innerHTML = `<tr><td colspan="4" class="empty">No saved answers yet.</td></tr>`; return; } el.factTable.innerHTML = facts.map(f => { const attempts = f.correct + f.wrong, rate = accuracy(f.correct, f.wrong), avgSec = attempts ? ((f.totalResponseMs / attempts) / 1000).toFixed(1) : '0.0'; return `<tr><td><span class="pill">${f.a} + ${f.b}</span><div class="hint">avg ${avgSec}s</div></td><td>${f.correct}</td><td>${f.wrong}</td><td>${rate}%</td></tr>`; }).join(''); }
+    function formatDuration(ms) { const totalSec = Math.round(ms / 1000), mins = Math.floor(totalSec / 60), secs = totalSec % 60; return mins === 0 ? `${secs}s` : `${mins}m ${secs}s`; }
+    function renderSessionHistory() { const history = normalizeSessionHistory(app.lifetime.sessionHistory || []); el.historyCount.textContent = String(history.length); if (!history.length) { el.historyAvgAccuracy.textContent = '0%'; el.historyAvgProblems.textContent = '0'; el.historyAvgDuration.textContent = '0s'; el.sessionTable.innerHTML = `<tr><td colspan="6" class="empty">No saved sessions yet.</td></tr>`; return; } const avgAccuracy = Math.round(history.reduce((sum, s) => sum + (s.accuracy || 0), 0) / history.length), avgProblems = Math.round(history.reduce((sum, s) => sum + (s.problemsCompleted || 0), 0) / history.length), avgDurationMs = Math.round(history.reduce((sum, s) => sum + (s.durationMs || 0), 0) / history.length); el.historyAvgAccuracy.textContent = `${avgAccuracy}%`; el.historyAvgProblems.textContent = String(avgProblems); el.historyAvgDuration.textContent = formatDuration(avgDurationMs); el.sessionTable.innerHTML = history.slice(0, 20).map(s => { const started = new Date(s.startedAt).toLocaleString(), hardest = (s.hardestFacts || []).slice(0, 3).join(', ') || '—'; return `<tr class="${s.isCurrent ? 'current-session-row' : ''}"><td>${started}${s.isCurrent ? '<div class="current-pill">Current</div>' : ''}</td><td>${formatDuration(s.durationMs || 0)}</td><td>${s.problemsCompleted || 0}</td><td>${s.correct || 0}</td><td>${s.accuracy || 0}%</td><td>${hardest}<div class="session-detail">top 10 saved for session</div></td></tr>`; }).join(''); }
+    function render() { el.sessionRight.textContent = session.correct; el.sessionWrong.textContent = session.wrong; el.sessionTotal.textContent = session.asked; el.sessionAccuracy.textContent = `${accuracy(session.correct, session.wrong)}%`; const lifeTotal = app.lifetime.correct + app.lifetime.wrong; el.lifeTotal.textContent = lifeTotal; el.lifeAccuracy.textContent = `${accuracy(app.lifetime.correct, app.lifetime.wrong)}%`; el.lifeSessions.textContent = app.lifetime.sessions; el.lifeStars.textContent = `⭐ ${app.lifetime.stars || 0}`; el.hardestFact.textContent = hardestFact(); renderFactTable(); renderSessionHistory(); }
+    function applySettingsFromUI() { const oldMax = app.settings.maxAddend; app.settings.timeLimit = Number(el.timeLimit.value); app.settings.maxAddend = Number(el.maxAddend.value); app.settings.repeatsBias = Number(el.repeatsBias.value); app.settings.inputMode = el.inputMode.value; if (oldMax !== app.settings.maxAddend) resetFactsForMax(app.settings.maxAddend); saveState(); syncInputMode(); render(); }
+    el.answerInput.addEventListener('input', () => { const cleaned = el.answerInput.value.replace(/[^0-9]/g, ''); if (el.answerInput.value !== cleaned) el.answerInput.value = cleaned; updatePadDisplay(); });
+    el.numpad.addEventListener('click', evt => { const btn = evt.target.closest('[data-pad]'); if (!btn) return; handlePadPress(btn.dataset.pad); });
     el.answerForm.addEventListener('submit', handleSubmit);
-    el.startBtn.addEventListener('click', () => {
-      if (paused) startGame();
-    });
+    el.startBtn.addEventListener('click', () => { if (paused) startGame(); });
     el.pauseBtn.addEventListener('click', pauseGame);
-    el.skipBtn.addEventListener('click', () => {
-      if (!paused && currentFact) {
-        stopTimer();
-        el.feedback.textContent = `Skipped — the answer was ${currentFact.a + currentFact.b}.`;
-        el.feedback.className = 'feedback bad';
-        currentFact.wrong += 1;
-        session.wrong += 1;
-        session.asked += 1;
-        app.lifetime.wrong += 1;
-        saveState();
-        render();
-        setTimeout(() => { if (!paused) nextRound(); }, 900);
-      }
-    });
+    el.skipBtn.addEventListener('click', () => { if (!paused && currentFact) { stopTimer(); const key = factKey(currentFact.a, currentFact.b); if (!session.factsSeen[key]) session.factsSeen[key] = { a: currentFact.a, b: currentFact.b, correct: 0, wrong: 0, totalResponseMs: 0 }; session.answeredFacts.push(key); if (session.answeredFacts.length > 8) session.answeredFacts.shift(); session.factsSeen[key].wrong += 1; currentFact.wrong += 1; session.wrong += 1; session.asked += 1; app.lifetime.wrong += 1; el.feedback.textContent = `Skipped — the answer was ${currentFact.a + currentFact.b}.`; el.feedback.className = 'feedback bad'; persistProgress(); setTimeout(() => { if (!paused) nextRound(); }, 900); } });
     el.newSessionBtn.addEventListener('click', newSession);
-    el.resetStatsBtn.addEventListener('click', () => {
-      const ok = confirm('Reset all saved progress on this device?');
-      if (ok) resetSavedData();
-    });
-    [el.timeLimit, el.maxAddend, el.repeatsBias, el.inputMode].forEach(input => {
-      input.addEventListener('change', applySettingsFromUI);
-    });
-
-    function boot() {
-      app = normalizeState(app);
-      el.timeLimit.value = String(app.settings.timeLimit || 10);
-      el.maxAddend.value = String(app.settings.maxAddend || 10);
-      el.repeatsBias.value = String(app.settings.repeatsBias || 2.5);
-      el.inputMode.value = app.settings.inputMode || 'keyboard';
-      el.answerInput.disabled = true;
-      el.submitBtn.disabled = true;
-      updatePadDisplay();
-      el.countdownNumber.textContent = String(app.settings.timeLimit || 10);
-      syncInputMode();
-      saveState();
-      render();
-    }
-
+    el.toggleParentBtn.addEventListener('click', () => { const nowHidden = el.parentView.classList.toggle('hidden'); el.toggleParentBtn.textContent = nowHidden ? 'Show Parent View' : 'Hide Parent View'; });
+    el.resetStatsBtn.addEventListener('click', () => { const ok = confirm('Reset all saved progress on this device?'); if (ok) resetSavedData(); });
+    [el.timeLimit, el.maxAddend, el.repeatsBias, el.inputMode].forEach(input => input.addEventListener('change', applySettingsFromUI));
+    window.addEventListener('beforeunload', () => { if (session.started) { upsertCurrentSessionHistory(); saveState(); } });
+    document.addEventListener('visibilitychange', () => { if (document.hidden && session.started) { upsertCurrentSessionHistory(); saveState(); } });
+    function boot() { app = normalizeState(app); app.lifetime.sessionHistory = normalizeSessionHistory(app.lifetime.sessionHistory).filter(item => !item.isCurrent); el.timeLimit.value = String(app.settings.timeLimit || 10); el.maxAddend.value = String(app.settings.maxAddend || 10); el.repeatsBias.value = String(app.settings.repeatsBias || 2.5); el.inputMode.value = app.settings.inputMode || 'numpad'; el.answerInput.disabled = true; el.submitBtn.disabled = true; updatePadDisplay(); el.countdownNumber.textContent = String(app.settings.timeLimit || 10); syncInputMode(); saveState(); render(); }
     boot();
   </script>
 </body>
